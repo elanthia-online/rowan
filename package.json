@@ -7,8 +7,9 @@
     "test": "npx ava",
     "build": "npx tsc",
     "predev": "npm run build",
-    "dev": "node dist/index.js"
+    "dev": "npx ."
   },
+  "bin": "dist/bin/rowan.js",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/elanthia-online/rowan.git"
