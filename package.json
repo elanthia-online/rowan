@@ -1,0 +1,47 @@
+{
+  "name": "@elanthia/rowan",
+  "version": "0.0.0",
+  "description": "a minimal terminal based gui for Gemstone",
+  "main": "dist/index.js",
+  "scripts": {
+    "test": "npx ava",
+    "build": "npx tsc",
+    "predev": "npm run build",
+    "dev": "node dist/index.js"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/elanthia-online/rowan.git"
+  },
+  "author": "Benjamin Clos",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/elanthia-online/rowan/issues"
+  },
+  "homepage": "https://github.com/elanthia-online/rowan#readme",
+  "devDependencies": {
+    "@types/jest": "^23.3.7",
+    "@types/node": "^10.12.0",
+    "jest": "^23.6.0",
+    "ts-jest": "^23.10.4",
+    "ts-node": "^7.0.1",
+    "typescript": "^3.1.3",
+    "@types/blessed": "^0.1.10"
+  },
+  "dependencies": {
+    "@elanthia/koschei": "git+ssh://git@github.com/elanthia-online/koschei.git",
+    "blessed": "^0.1.81",
+    "clipboardy": "^1.2.3"
+  },
+  "jest": {
+    "moduleFileExtensions": [
+      "ts",
+      "tsx",
+      "js"
+    ],
+    "transform": {
+      "\\.(ts|tsx)$": "ts-jest"
+    },
+    "testRegex": "/test/.*\\.(ts|tsx|js)$"
+  }
+}
