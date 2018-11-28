@@ -16,12 +16,16 @@ export default class Hilite {
   // for user-land preferences
   // and internal defaults
   static COLOR_SCHEME = {} as Record<string, string>
-  static async load_color_scheme () {
+  static async load_color_scheme (profile : string) {
+    if (profile) {
+      // todo: load user colors
+    }
     Object.assign(Hilite.COLOR_SCHEME, DEFAULT_COLOR_SCHEME)
   }
-
+  static async load_user_patterns () {
+    // todo: load user patterns
+  }
   static inject_tag_color (compiler : TextOffset, tag : Koschei.Tag) : TextOffset {
-    process.emit("log" as any, [compiler, tag] as any)
     if (typeof tag.start !== "number" || typeof tag.end !== "number") return compiler
     const before  = compiler.text.substr(0, tag.start + compiler.offset)
     const after   = compiler.text.substr(tag.end + compiler.offset, compiler.text.length)
@@ -35,5 +39,21 @@ export default class Hilite {
     const body = `${color}-fg`
     const hilited = `{${body}}${text}{/${body}}`
     return {hilited, offset : ((body.length + 2) * 2) + 1}
+  }
+  /**
+   * helper to easily create a hilite renderable tag
+   */
+  static renderable (tag : Koschei.Tag) {
+    // dummy wrapper that we can use as a
+    // renderable entry point for the rendering engine
+    const wrapper = 
+      Koschei.Tag.of("text", {id : tag.id as string})
+    // give it a pseudo range
+    tag.start = 0
+    tag.end   = tag.text.length
+    // add it to the parent wrapper
+    wrapper.add_child(tag)
+    // return the parent wrapper for the rendering engine
+    return wrapper
   }
 }

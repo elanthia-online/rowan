@@ -6,4 +6,5 @@ export default
   , border  : "#BDEB07"
   , pink    : "#E600FF"
   , cyan    : "#0B8185"
+  , autocomplete : "#E600FF"
   } as Record<string, string>

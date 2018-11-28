@@ -1,22 +1,28 @@
-import fs           from "fs"
-import util         from "util"
 import * as Koschei from "@elanthia/koschei"
-import blessed      from "blessed"
+import Blessed     from "blessed"
+import Contrib     from "blessed-contrib"
 import Feed         from "./components/feed"
-import Input        from "./components/input"
-import Pane         from "./components/pane"
-import { EventEmitter } from "events";
-
+import Input, { CLIMenu } from "./components/input"
+import { EventEmitter } from "events"
+import Hand from "./components/hand"
+import ActiveSpells from "./components/active-spells"
+import Hilite from "../hilite/hilite"
+declare type HandName =
+  | "spell"
+  | "right"
+  | "left"
 declare interface AppOpts {
   title : string;
   max_buffer_size? : number;
   parser : Koschei.Bridge;
-  log? : fs.WriteStream;
 }
-
-declare interface PanesMap {
-  left  : Pane;
-  right : Pane;
+declare type DOMMap = {
+  feed          : Feed;
+  input         : Input;
+  left_hand     : Hand;
+  right_hand    : Hand;
+  spell         : Hand;
+  active_spells : ActiveSpells;
 }
 
 const CURSOR_OPTS : any =
@@ -25,78 +31,139 @@ const CURSOR_OPTS : any =
   , shape      : 'underline'
   , color      : '#f1f1f1'
   }
-
 export default class App extends EventEmitter {
   static of (opts : AppOpts) {
     return new App(opts)
   }
+  static layout (app : App, screen: Blessed.Widgets.Screen, grid : Contrib.Widgets.GridElement) {
+    // left pane
+    const active_spells =
+      grid.set(2, 0, 12, 4, Contrib.table,
+        { keys          : true
+        , fg            : 'white'
+        , interactive   : false
+        , label         : 'active spells'
+        , border : {type: "line", fg: "cyan"} 
+        , columnSpacing : 0 //in chars
+        , columnWidth   : [24, 5] /*in chars*/ 
+        })
+    // right pane
+    const left_hand = 
+      grid.set(0, 5, 2, 5, Blessed.box, 
+        { label: "left"
+        , border : {type: "line", fg: "cyan"}
+        })
+    const right_hand = 
+      grid.set(0, 10, 2, 5, Blessed.box, 
+        { label: "right"
+        , border : {type: "line", fg: "cyan"} 
+        })
+    const spell = 
+      grid.set(0, 15, 2, 5, Blessed.box, 
+        { label: "spell"
+        , border : {type: "line", fg: "cyan"} 
+        })
+    const feed =
+      grid.set(2, 4, 20, 20, Blessed.box, 
+        { scrollable   : true
+        , tags         : true
+        , mouse        : true
+        , keys         : true
+        , alwaysScroll : true
+        , scrollbar    : { ch: "|", style: {bg: "#BDEB07"}}
+        })
+    const input =
+      grid.set(24 - 2, 4, 2, 20, Blessed.textarea, 
+        { label: ">"
+        , inputOnFocus : true
+        , scrollable : false
+        , border : {type: "line", fg: "cyan"} 
+        })
 
-  readonly screen  : blessed.Widgets.Screen;
-  readonly parser  : Koschei.Bridge;
-  readonly panes   : PanesMap;
-  readonly log?    : fs.WriteStream;
-  readonly feed    : Feed;
-  readonly input   : Input;
-  readonly components : Map<string, any>;
+    return {
+      left_hand, right_hand, spell, feed, input
+    , active_spells
+    }
+  }
+  readonly screen : Blessed.Widgets.Screen;
+  readonly parser : Koschei.Bridge;
+  readonly grid : Contrib.Widgets.GridElement;
+  readonly dom  : DOMMap
   prompt : string;
   server_offset : number;
-
-  constructor ({title, max_buffer_size, log, parser} : AppOpts) {
+  constructor ({title, parser} : AppOpts) {
     super()
-    this.parser     = parser
-    this.log        = log
-    this.components = new Map()
-    this.prompt     = ">"
+    const app   = this
+    this.parser = parser
+    this.prompt = ">"
     this.server_offset = 0
 
-    process.on("log" as any, (data : any) => this.onlog(data))
+    //const dom = this.dom = {} as DOMLayout
 
-    const screen = this.screen = blessed.screen(
-      { smartCSR : true
-      , cursor   : CURSOR_OPTS
-      }) as blessed.Widgets.Screen;
+    const screen = this.screen = 
+      Blessed.screen(
+        { smartCSR    : true
+        , cursor      : CURSOR_OPTS
+        , dockBorders : true
+        , title       : title
+        })
 
-    if (title) screen.title = title
+    const grid = this.grid = 
+      new Contrib.grid(
+        { rows   : 24
+        , cols   : 24
+        , hideBorder : true
+        , screen : screen
+        })
 
-    this.panes = 
-      { left  : Pane.of({screen, width: 10})
-      , right : Pane.of({screen, width: 90, left: 10})
+    const dom = App.layout(app, screen, grid)
+
+    this.dom = 
+      { right_hand : Hand.of({app, screen, ele: dom.right_hand})
+      , left_hand  : Hand.of({app, screen, ele: dom.left_hand})
+      , spell      : Hand.of({app, screen, ele: dom.spell})
+      , feed       : Feed.of({app, screen, ele: dom.feed})
+      , input      : Input.of({app, screen, ele: dom.input})
+      , active_spells : ActiveSpells.of({app, screen, ele: dom.active_spells})
       }
 
-    // the main input box like all other FEs
-    this.input = Input.of({screen
-      , parent : this.panes.right
-      , height : 8
-      , top    : 92
-      })
-
-    // the main game feed
-    this.feed = Feed.of({screen, max_buffer_size, title
-      , parent : this.panes.right
-      , height : 92
-      })
     // write game feed
     parser.on("tag", (tag : Koschei.Tag) => {
       if (tag.text.trim().length == 0) return // empty
-      this.route(tag)
+      app.route(tag)
     })
 
     screen.key(['escape', 'C-c'], _ => process.exit(0))
     
-    this.input.on("user:command", (command : any) => {
-      this.feed.rpush(
-        Koschei.Tag.of("user:command", {}, command.to_feed))
-      this.parser.socket.write(`${command.to_game}\n`)
+    app.on("cli", (command : any) => {
+      this.dom.feed.rpush(
+        Koschei.Tag.of("cli", {}, command.to_feed))
+      app.parser.socket.write(`${command.to_game}\n`)
     })
     
+    app.on("menu", ({id, options} : CLIMenu) => {
+      this.dom.feed.rpush(
+        Hilite.renderable(
+          Koschei.Tag.of("menu", {id}, 
+          `Menu[:${id}]\n` + options.map(
+            (option : any, id : number) => `${id} > ${option.text}`)
+          .join("\n"))))
+    })
+
+    this.on("error", ({id, text})=> {
+      debugger;
+      if (id && text) this.dom.feed.rpush(
+        Koschei.Tag.of("error", {id}, text))
+    })
+    this.redraw()
   }
-  render () {
+  redraw () {
     this.screen.render()
   }
   route (tag : Koschei.Tag) {
-    //process.emit("log" as any, tag as any)
+    //this.emit("log", tag)
     switch (tag.name) {
-      case "cast"       : return this.onhand(tag)
+      case "spell"      : return this.onhand(tag)
       case "left"       : return this.onhand(tag)
       case "right"      : return this.onhand(tag)
       case "text"       : return this.ontext(tag)
@@ -106,17 +173,13 @@ export default class App extends EventEmitter {
       case "dialogdata" : return this.ondialog(tag)
       case "progressbar": return this.onprogress(tag)
       case "prompt"     : return this.onprompt(tag)
+      default : this.emit("log", [":unhandled", tag])
     }
-  }
-
-  onlog (thing : any) {
-    if (!this.log) return
-    this.log.write(util.inspect(thing) + "\n")
   }
 
   onstream (tag : Koschei.Tag) {
     switch (tag.id) {
-      case "thoughts" : return this.feed.rpush(tag)
+      case "thoughts" : return this.dom.feed.rpush(tag)
       default: // omit
     }
   }
@@ -124,21 +187,28 @@ export default class App extends EventEmitter {
     //this.onlog(tag)
   }
   ondialog (tag : Koschei.Tag) {
-    tag.children.map(this.route, this)
+    switch ((tag.id || "").toLowerCase()) {
+      case "activespells": return this.dom.active_spells.update(tag)
+    }
   }
   ontext (tag : Koschei.Tag) {
-    this.feed.rpush(tag)
+    this.dom.feed.rpush(tag)
   }
   onhand (tag : Koschei.Tag) {
-
+    this.emit("log", tag)
+    switch (tag.name as HandName) {
+      case "left" : return this.dom.left_hand.update(tag)
+      case "right": return this.dom.right_hand.update(tag)
+      case "spell": return this.dom.spell.update(tag)
+    }
   }
   onstyle (tag : Koschei.Tag) {
-    this.feed.rpush(tag)
-    if (tag.id == "roomName") this.feed.set_title(tag.text.trim())
+    this.dom.feed.rpush(tag)
+    if (tag.id == "roomName") this.dom.feed.set_title(tag.text.trim())
   }
   onprompt (tag : Koschei.Tag) {
-    this.input.set_prompt(tag.text)
+    this.dom.input.set_prompt(tag.text)
     this.server_offset = Number(tag.attrs.time) - Date.now()
-    this.feed.rpush(tag)
+    this.dom.feed.rpush(tag)
   }
 }

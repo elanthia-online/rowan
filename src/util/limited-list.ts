@@ -18,11 +18,17 @@ export default class LimitedList<A> {
   get length () {
     return this.size
   }
-  get last () {
-    return this.members[this.members.length-1]
+  ago (n : number, fallback? : string) {
+    return this.members[this.members.length-(n + 1)] || fallback
   }
   lpop () {
     return this.members.shift()
+  }
+  at (idx: number, fallback? : A) {
+    return this.members[idx] || fallback
+  }
+  toArray () : Array<A> {
+    return this.members
   }
   rpush (t : A) {
     this.members.push(t)
