@@ -1,4 +1,4 @@
-# Rowan
+# Rowan [![Build Status](https://travis-ci.org/elanthia-online/rowan.svg?branch=master)](https://travis-ci.org/elanthia-online/rowan)
 
 a [blessed driven tui](https://github.com/chjj/blessed) similar to Profanity.
 
